@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-MouseFood-80cb5658-e0ce-4c6f-9270-dcb424fab94a</UserSecretsId>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Exclude test files from main project -->
+    <Compile Remove="..\MouseFood.Tests\**" />
+    <EmbeddedResource Remove="..\MouseFood.Tests\**" />
+    <None Remove="..\MouseFood.Tests\**" />
+  </ItemGroup>
+</Project>
