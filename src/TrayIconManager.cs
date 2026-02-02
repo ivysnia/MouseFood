@@ -92,6 +92,23 @@ public class TrayIconManager : ITrayIconManager
         };
         contextMenu.Items.Add(startupItem);
 
+        var taskbarItem = new ToolStripMenuItem("Taskbar Settings...");
+        taskbarItem.Click += (s, e) =>
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ms-settings:taskbar")
+                {
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open Taskbar Settings");
+            }
+        };
+        contextMenu.Items.Add(taskbarItem);
+
         contextMenu.Items.Add(new ToolStripSeparator());
 
         var exitItem = new ToolStripMenuItem("Exit");

@@ -27,7 +27,7 @@ dotnet publish src/MouseFood.csproj -c Release -r win-x64 --self-contained -p:Pu
 
 This produces `Dist/MouseFood.exe` which can be copied anywhere and run standalone.
 
-Right-click the tray icon for options: **Refresh Now**, **Show Log**, **Start with Windows**, and **Exit**.
+Right-click the tray icon for options: **Refresh Now**, **Show Log**, **Start with Windows**, **Taskbar Settings...**, and **Exit**.
 
 ## Configuration
 
