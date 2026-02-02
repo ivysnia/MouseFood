@@ -55,6 +55,26 @@ public class TrayIconManager : IDisposable
 
         contextMenu.Items.Add(new ToolStripSeparator());
 
+        var startupItem = new ToolStripMenuItem("Start with Windows");
+        startupItem.Checked = IsStartupEnabled();
+        startupItem.Click += (s, e) =>
+        {
+            var item = (ToolStripMenuItem)s!;
+            if (item.Checked)
+            {
+                DisableStartup();
+                item.Checked = false;
+            }
+            else
+            {
+                EnableStartup();
+                item.Checked = true;
+            }
+        };
+        contextMenu.Items.Add(startupItem);
+
+        contextMenu.Items.Add(new ToolStripSeparator());
+
         var exitItem = new ToolStripMenuItem("Exit");
         exitItem.Click += (s, e) => ExitRequested?.Invoke();
         contextMenu.Items.Add(exitItem);
@@ -200,6 +220,53 @@ public class TrayIconManager : IDisposable
         // Convert bitmap to icon
         var icon = Icon.FromHandle(bitmap.GetHicon());
         return icon;
+    }
+
+    private const string StartupRegistryKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+    private const string StartupValueName = "MouseFood";
+
+    private static bool IsStartupEnabled()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryKey);
+            return key?.GetValue(StartupValueName) != null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void EnableStartup()
+    {
+        try
+        {
+            var exePath = Environment.ProcessPath;
+            if (exePath == null) return;
+
+            using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryKey, writable: true);
+            key?.SetValue(StartupValueName, $"\"{exePath}\"");
+            _logger.LogInformation("Startup entry added: {Path}", exePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to enable startup");
+        }
+    }
+
+    private void DisableStartup()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryKey, writable: true);
+            key?.DeleteValue(StartupValueName, throwOnMissingValue: false);
+            _logger.LogInformation("Startup entry removed");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to disable startup");
+        }
     }
 
     public void Dispose()
