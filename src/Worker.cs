@@ -7,7 +7,7 @@ public class Worker : BackgroundService
     private readonly ILogger<Worker> _logger;
     private readonly IHostApplicationLifetime _applicationLifetime;
     private readonly RazerBatteryReader _batteryReader;
-    private readonly TrayIconManager _trayIcon;
+    private readonly ITrayIconManager _trayIcon;
     private readonly MouseFoodSettings _settings;
     private readonly ManualResetEventSlim _refreshEvent = new(false);
 
@@ -15,7 +15,7 @@ public class Worker : BackgroundService
         ILogger<Worker> logger,
         IHostApplicationLifetime applicationLifetime,
         RazerBatteryReader batteryReader,
-        TrayIconManager trayIcon,
+        ITrayIconManager trayIcon,
         IOptions<MouseFoodSettings> settings)
     {
         _logger = logger;

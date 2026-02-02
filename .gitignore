@@ -18,8 +18,9 @@ bld/
 *.sln.docstates
 *.userprefs
 
-# Visual Studio Code
-.vscode/
+# Visual Studio Code (keep tasks.json for shared build commands)
+.vscode/*
+!.vscode/tasks.json
 .history/
 
 # Rider
@@ -100,6 +101,9 @@ Desktop.ini
 
 # Recycle Bin
 $RECYCLE.BIN/
+
+# Publish output
+Dist/
 
 # Claude Code
 .claude/

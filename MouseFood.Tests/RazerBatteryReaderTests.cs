@@ -15,7 +15,7 @@ public class RazerBatteryReaderTests
             LastUpdated = DateTime.Now
         };
 
-        var mockParser = new Mock<SynapseLogParser>(Mock.Of<Microsoft.Extensions.Logging.ILogger<SynapseLogParser>>(), (string?)null);
+        var mockParser = new Mock<SynapseLogParser>(new object[] { Mock.Of<Microsoft.Extensions.Logging.ILogger<SynapseLogParser>>(), null! });
         mockParser.Setup(p => p.GetBatteryFromLogs()).Returns(expectedStatus);
 
         var reader = new RazerBatteryReader(mockParser.Object);
@@ -34,7 +34,7 @@ public class RazerBatteryReaderTests
     public void GetBatteryStatus_WhenParserReturnsNull_ReturnsNull()
     {
         // Arrange
-        var mockParser = new Mock<SynapseLogParser>(Mock.Of<Microsoft.Extensions.Logging.ILogger<SynapseLogParser>>(), (string?)null);
+        var mockParser = new Mock<SynapseLogParser>(new object[] { Mock.Of<Microsoft.Extensions.Logging.ILogger<SynapseLogParser>>(), null! });
         mockParser.Setup(p => p.GetBatteryFromLogs()).Returns((BatteryStatus?)null);
 
         var reader = new RazerBatteryReader(mockParser.Object);

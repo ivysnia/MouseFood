@@ -9,7 +9,7 @@ public class RazerBatteryReader
         _synapseLogParser = synapseLogParser;
     }
 
-    public BatteryStatus? GetBatteryStatus()
+    public virtual BatteryStatus? GetBatteryStatus()
     {
         return _synapseLogParser.GetBatteryFromLogs();
     }

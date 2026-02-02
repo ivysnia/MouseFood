@@ -4,16 +4,26 @@ using Microsoft.Win32;
 
 namespace MouseFood;
 
-public class TrayIconManager : IDisposable
+public interface ITrayIconManager : IDisposable
+{
+    event Action? RefreshRequested;
+    event Action? ExitRequested;
+    void UpdateStatus(BatteryStatus? status);
+}
+
+public class TrayIconManager : ITrayIconManager
 {
     private readonly ILogger<TrayIconManager> _logger;
+    private readonly InMemoryLogBuffer _logBuffer;
     private readonly NotifyIcon _notifyIcon;
     private BatteryStatus? _lastStatus;
     private bool _lowBatteryNotificationShown = false;
+    private LogViewerForm? _logViewerForm;
 
-    public TrayIconManager(ILogger<TrayIconManager> logger)
+    public TrayIconManager(ILogger<TrayIconManager> logger, InMemoryLogBuffer logBuffer)
     {
         _logger = logger;
+        _logBuffer = logBuffer;
 
         _notifyIcon = new NotifyIcon
         {
@@ -52,6 +62,15 @@ public class TrayIconManager : IDisposable
         var refreshItem = new ToolStripMenuItem("Refresh Now");
         refreshItem.Click += (s, e) => RefreshRequested?.Invoke();
         contextMenu.Items.Add(refreshItem);
+
+        var showLogItem = new ToolStripMenuItem("Show Log");
+        showLogItem.Click += (s, e) =>
+        {
+            _logViewerForm ??= new LogViewerForm(_logBuffer);
+            _logViewerForm.Show();
+            _logViewerForm.BringToFront();
+        };
+        contextMenu.Items.Add(showLogItem);
 
         contextMenu.Items.Add(new ToolStripSeparator());
 
@@ -153,71 +172,80 @@ public class TrayIconManager : IDisposable
         else
         {
             var chargingText = status.IsCharging ? " (Charging)" : "";
-            var timeAgo = DateTime.Now - status.LastUpdated;
-            _notifyIcon.Text = $"Razer Mouse: {status.Percentage}%{chargingText}\nUpdated: {timeAgo.TotalMinutes:F0}m ago";
+            _notifyIcon.Text = $"Razer Mouse: {status.Percentage}%{chargingText}\nUpdated: {status.LastUpdated:HH:mm}";
         }
     }
 
     private Icon CreateBatteryIcon(BatteryStatus? status)
     {
-        // Create a 16x16 bitmap for the icon
-        var bitmap = new Bitmap(16, 16);
+        // Use the system's preferred icon size (scales with DPI)
+        var iconSize = SystemInformation.SmallIconSize;
+        var w = iconSize.Width;
+        var h = iconSize.Height;
+        var bitmap = new Bitmap(w, h);
 
         using (var g = Graphics.FromImage(bitmap))
         {
             g.Clear(Color.Transparent);
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.None;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.SingleBitPerPixelGridFit;
 
             if (status == null)
             {
-                // Draw a question mark
-                using (var font = new Font("Arial", 10, FontStyle.Bold))
+                using (var font = new Font("Arial", h * 0.6f, FontStyle.Bold))
                 {
-                    g.DrawString("?", font, Brushes.White, -2, -2);
+                    var size = g.MeasureString("?", font);
+                    g.DrawString("?", font, Brushes.White,
+                               (w - size.Width) / 2, (h - size.Height) / 2);
                 }
             }
             else
             {
-                // Draw battery bar
-                var batteryHeight = 12;
-                var batteryWidth = 10;
-                var x = 3;
-                var y = 2;
+                // Horizontal battery flush to top, scaled to icon size
+                var batteryWidth = (int)(w * 0.75f);
+                var batteryHeight = (int)(h * 0.3f);
+                var x = (w - batteryWidth - 2) / 2; // Center with room for nub
+                var y = 0;
 
-                // Battery outline
-                g.DrawRectangle(Pens.White, x, y, batteryWidth, batteryHeight);
-                g.DrawRectangle(Pens.White, x + 3, y - 1, 4, 1); // Battery terminal
-
-                // Battery fill based on percentage
+                // Fill color
                 var fillColor = status.IsCharging ? Color.LightGreen :
                                status.Percentage > 50 ? Color.LimeGreen :
                                status.Percentage > 20 ? Color.Orange :
                                Color.Red;
 
-                var fillHeight = (int)(batteryHeight * status.Percentage / 100.0);
-                if (fillHeight > 0)
+                // Battery outline in a brighter shade of the fill color
+                var borderColor = ControlPaint.Light(fillColor, 0.5f);
+                using (var pen = new Pen(borderColor, 1))
+                {
+                    g.DrawRectangle(pen, x, y, batteryWidth, batteryHeight);
+                    // Battery terminal (right nub)
+                    using (var nubBrush = new SolidBrush(borderColor))
+                        g.FillRectangle(nubBrush, x + batteryWidth + 1, y + 1, 1, batteryHeight - 1);
+                }
+
+                var fillWidth = (int)(batteryWidth * status.Percentage / 100.0);
+                if (fillWidth > 0)
                 {
                     using (var brush = new SolidBrush(fillColor))
                     {
-                        g.FillRectangle(brush, x + 1, y + batteryHeight - fillHeight + 1,
-                                      batteryWidth - 1, fillHeight - 1);
+                        g.FillRectangle(brush, x + 1, y + 1,
+                                      Math.Min(fillWidth, batteryWidth - 1), batteryHeight - 1);
                     }
                 }
 
-                // Draw percentage text if space allows
-                if (status.Percentage < 100)
+                // Percentage text below the battery
+                var text = status.Percentage.ToString();
+                var fontSize = h * 0.4f;
+                using (var font = new Font("Segoe UI", fontSize, FontStyle.Bold))
+                using (var brush = new SolidBrush(fillColor))
                 {
-                    var text = status.Percentage.ToString();
-                    using (var font = new Font("Arial", 6, FontStyle.Bold))
-                    {
-                        var size = g.MeasureString(text, font);
-                        g.DrawString(text, font, Brushes.White,
-                                   (16 - size.Width) / 2, 14 - size.Height);
-                    }
+                    var size = g.MeasureString(text, font);
+                    g.DrawString(text, font, brush,
+                               (w - size.Width) / 2, batteryHeight + 1);
                 }
             }
         }
 
-        // Convert bitmap to icon
         var icon = Icon.FromHandle(bitmap.GetHicon());
         return icon;
     }
@@ -271,6 +299,7 @@ public class TrayIconManager : IDisposable
 
     public void Dispose()
     {
+        _logViewerForm?.Dispose();
         _notifyIcon?.Icon?.Dispose();
         _notifyIcon?.Dispose();
     }

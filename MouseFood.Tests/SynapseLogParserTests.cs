@@ -204,6 +204,73 @@ Some content in between
         Assert.Equal(100, result.Percentage);
     }
 
+    [Fact]
+    public void GetBatteryFromLogs_WithDischargingStatus_DetectsAsCharging()
+    {
+        // "Discharging" contains "Charging" and not "NoCharge", so current logic treats it as charging
+        var logContent = @"""powerStatus"":{""chargingStatus"":""Discharging"",""level"":60}";
+        var logFilePath = Path.Combine(_testLogDirectory, "systray_systrayv21.log");
+        File.WriteAllText(logFilePath, logContent);
+
+        var parser = CreateParser(_testLogDirectory);
+
+        // Act
+        var result = parser.GetBatteryFromLogs();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(60, result.Percentage);
+        Assert.True(result.IsCharging);
+    }
+
+    [Fact]
+    public void GetBatteryFromLogs_WithSpacesAfterColon_StillParses()
+    {
+        // Regex allows optional whitespace after colons (but not before)
+        var logContent = @"""powerStatus"":{ ""chargingStatus"": ""NoCharge"", ""level"": 42 }";
+        var logFilePath = Path.Combine(_testLogDirectory, "systray_systrayv21.log");
+        File.WriteAllText(logFilePath, logContent);
+
+        var parser = CreateParser(_testLogDirectory);
+
+        // Act
+        var result = parser.GetBatteryFromLogs();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(42, result.Percentage);
+    }
+
+    [Fact]
+    public void GetBatteryFromLogs_WithNonExistentDirectory_ReturnsNull()
+    {
+        // Arrange
+        var parser = CreateParser(Path.Combine(_testLogDirectory, "does_not_exist"));
+
+        // Act
+        var result = parser.GetBatteryFromLogs();
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetBatteryFromLogs_WithMalformedJson_ReturnsNull()
+    {
+        // Arrange - has powerStatus but level is missing
+        var logContent = @"""powerStatus"":{""chargingStatus"":""NoCharge""}";
+        var logFilePath = Path.Combine(_testLogDirectory, "systray_systrayv21.log");
+        File.WriteAllText(logFilePath, logContent);
+
+        var parser = CreateParser(_testLogDirectory);
+
+        // Act
+        var result = parser.GetBatteryFromLogs();
+
+        // Assert
+        Assert.Null(result);
+    }
+
     private SynapseLogParser CreateParser(string logDirectory)
     {
         // Inject test directory via constructor

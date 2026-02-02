@@ -7,6 +7,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-MouseFood-80cb5658-e0ce-4c6f-9270-dcb424fab94a</UserSecretsId>
     <UseWindowsForms>true</UseWindowsForms>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
+    <!-- WinForms trimming warning: we only use NotifyIcon/ContextMenuStrip which work fine trimmed -->
+    <_SuppressWinFormsTrimError>true</_SuppressWinFormsTrimError>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,5 +26,10 @@
     <Compile Remove="..\MouseFood.Tests\**" />
     <EmbeddedResource Remove="..\MouseFood.Tests\**" />
     <None Remove="..\MouseFood.Tests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="appsettings.json" CopyToPublishDirectory="Never" />
+    <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
   </ItemGroup>
 </Project>

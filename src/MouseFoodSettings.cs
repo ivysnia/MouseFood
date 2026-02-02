@@ -2,5 +2,5 @@ namespace MouseFood;
 
 public class MouseFoodSettings
 {
-    public int UpdateIntervalMinutes { get; set; } = 10;
+    public int UpdateIntervalMinutes { get; set; } = 5;
 }

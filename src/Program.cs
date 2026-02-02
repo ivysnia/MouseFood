@@ -1,6 +1,15 @@
 using MouseFood;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+
+// Ensure only one instance runs at a time
+using var mutex = new Mutex(true, "MouseFood-SingleInstance", out bool isNewInstance);
+if (!isNewInstance)
+{
+    Console.WriteLine("MouseFood is already running.");
+    return;
+}
 
 // Enable Windows Forms for system tray
 System.Windows.Forms.Application.SetHighDpiMode(System.Windows.Forms.HighDpiMode.SystemAware);
@@ -12,9 +21,16 @@ Console.WriteLine("Starting... Look for the tray icon in your system tray!");
 Console.WriteLine("Right-click the tray icon to refresh or exit.");
 Console.WriteLine();
 
+// In-memory log buffer for the log viewer window
+var logBuffer = new InMemoryLogBuffer();
+
 // Use the generic host so we can call UseWindowsService()
 var host = Host.CreateDefaultBuilder(args)
     .UseWindowsService()
+    .ConfigureLogging(logging =>
+    {
+        logging.AddProvider(new InMemoryLoggerProvider(logBuffer));
+    })
     .ConfigureServices((context, services) =>
     {
         // Bind settings from appsettings.json
@@ -22,9 +38,11 @@ var host = Host.CreateDefaultBuilder(args)
             context.Configuration.GetSection("MouseFoodSettings"));
 
         // Register services
+        services.AddSingleton(logBuffer);
         services.AddSingleton<SynapseLogParser>();
         services.AddSingleton<RazerBatteryReader>();
         services.AddSingleton<TrayIconManager>();
+        services.AddSingleton<ITrayIconManager>(sp => sp.GetRequiredService<TrayIconManager>());
         services.AddHostedService<Worker>();
     })
     .Build();
