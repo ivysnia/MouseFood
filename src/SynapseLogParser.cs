@@ -8,6 +8,7 @@ public class SynapseLogParser
     private readonly ILogger<SynapseLogParser> _logger;
     private readonly string _logDirectory;
     private readonly string _logFilePattern = "systray_systrayv2*.log";
+    private string? _lastLoggedDevice;
 
     public SynapseLogParser(ILogger<SynapseLogParser> logger, string? logDirectory = null)
     {
@@ -115,14 +116,26 @@ public class SynapseLogParser
             bool isCharging = chargingStatus.Contains("Charging", StringComparison.OrdinalIgnoreCase) &&
                              !chargingStatus.Contains("NoCharge", StringComparison.OrdinalIgnoreCase);
 
-            _logger.LogInformation("Battery from Synapse logs: {Level}%, Status: {Status}, Charging: {Charging}",
+            // Try to extract device name from nearby context
+            // Look for "name":"Device Name" pattern in the surrounding content
+            string? deviceName = ExtractDeviceName(content, matches[0].Index);
+
+            // Log device name only when it changes (or on first detection)
+            if (deviceName != null && deviceName != _lastLoggedDevice)
+            {
+                _logger.LogInformation("Detected device: {Device}", deviceName);
+                _lastLoggedDevice = deviceName;
+            }
+
+            _logger.LogInformation("Battery: {Level}%, Status: {Status}, Charging: {Charging}",
                 batteryLevel, chargingStatus, isCharging);
 
             return new BatteryStatus
             {
                 Percentage = batteryLevel,
                 IsCharging = isCharging,
-                LastUpdated = DateTime.Now
+                LastUpdated = DateTime.Now,
+                DeviceName = deviceName
             };
         }
         catch (Exception ex)
@@ -130,5 +143,35 @@ public class SynapseLogParser
             _logger.LogDebug(ex, "Error parsing {File}", Path.GetFileName(filePath));
             return null;
         }
+    }
+
+    private string? ExtractDeviceName(string content, int powerStatusIndex)
+    {
+        // Look backwards from the powerStatus position to find device name
+        // The log format typically has device info before the powerStatus
+        // Look for patterns like "name":"Razer DeathAdder V3 Pro" or "productName":"..."
+        var searchStart = Math.Max(0, powerStatusIndex - 2000);
+        var searchLength = Math.Min(2000, powerStatusIndex - searchStart);
+        var searchContent = content.Substring(searchStart, searchLength + (content.Length - powerStatusIndex > 500 ? 500 : content.Length - powerStatusIndex));
+
+        // Try different patterns for device name
+        var patterns = new[]
+        {
+            @"""productName""\s*:\s*""([^""]+)""",
+            @"""name""\s*:\s*""(Razer[^""]+)""",
+            @"""deviceName""\s*:\s*""([^""]+)"""
+        };
+
+        foreach (var pattern in patterns)
+        {
+            var matches = Regex.Matches(searchContent, pattern);
+            if (matches.Count > 0)
+            {
+                // Return the last match (closest to powerStatus)
+                return matches[^1].Groups[1].Value;
+            }
+        }
+
+        return null;
     }
 }

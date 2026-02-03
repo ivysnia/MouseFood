@@ -117,8 +117,9 @@ public class TrayIconManager : ITrayIconManager
 
         _notifyIcon.ContextMenuStrip = contextMenu;
 
-        // Set initial icon
-        UpdateIcon(null);
+        // Set initial icon from embedded resource so Windows Taskbar Settings shows a proper icon
+        // (it caches whatever icon the NotifyIcon has when first shown)
+        _notifyIcon.Icon = LoadEmbeddedIcon();
     }
 
     public event Action? RefreshRequested;
@@ -169,8 +170,9 @@ public class TrayIconManager : ITrayIconManager
             // Dispose old icon
             var oldIcon = _notifyIcon.Icon;
 
-            // Create new icon with battery percentage
-            _notifyIcon.Icon = CreateBatteryIcon(status);
+            // When no data, use the static embedded icon so Windows Taskbar Settings
+            // always shows a proper battery icon (it caches whatever icon is active)
+            _notifyIcon.Icon = status != null ? CreateBatteryIcon(status) : LoadEmbeddedIcon();
 
             oldIcon?.Dispose();
         }
@@ -188,12 +190,13 @@ public class TrayIconManager : ITrayIconManager
         }
         else
         {
+            var deviceName = status.DeviceName ?? "Razer Mouse";
             var chargingText = status.IsCharging ? " (Charging)" : "";
-            _notifyIcon.Text = $"Razer Mouse: {status.Percentage}%{chargingText}\nUpdated: {status.LastUpdated:HH:mm}";
+            _notifyIcon.Text = $"{deviceName}: {status.Percentage}%{chargingText}\nUpdated: {status.LastUpdated:HH:mm}";
         }
     }
 
-    private Icon CreateBatteryIcon(BatteryStatus? status)
+    private Icon CreateBatteryIcon(BatteryStatus status)
     {
         // Use the system's preferred icon size (scales with DPI)
         var iconSize = SystemInformation.SmallIconSize;
@@ -207,59 +210,47 @@ public class TrayIconManager : ITrayIconManager
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.None;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.SingleBitPerPixelGridFit;
 
-            if (status == null)
+            // Horizontal battery flush to top, scaled to icon size
+            var batteryWidth = (int)(w * 0.75f);
+            var batteryHeight = (int)(h * 0.3f);
+            var x = (w - batteryWidth - 2) / 2; // Center with room for nub
+            var y = 0;
+
+            // Fill color
+            var fillColor = status.IsCharging ? Color.LightGreen :
+                           status.Percentage > 50 ? Color.LimeGreen :
+                           status.Percentage > 20 ? Color.Orange :
+                           Color.Red;
+
+            // Battery outline in a brighter shade of the fill color
+            var borderColor = ControlPaint.Light(fillColor, 0.5f);
+            using (var pen = new Pen(borderColor, 1))
             {
-                using (var font = new Font("Arial", h * 0.6f, FontStyle.Bold))
-                {
-                    var size = g.MeasureString("?", font);
-                    g.DrawString("?", font, Brushes.White,
-                               (w - size.Width) / 2, (h - size.Height) / 2);
-                }
+                g.DrawRectangle(pen, x, y, batteryWidth, batteryHeight);
+                // Battery terminal (right nub)
+                using (var nubBrush = new SolidBrush(borderColor))
+                    g.FillRectangle(nubBrush, x + batteryWidth + 1, y + 1, 1, batteryHeight - 1);
             }
-            else
+
+            var fillWidth = (int)(batteryWidth * status.Percentage / 100.0);
+            if (fillWidth > 0)
             {
-                // Horizontal battery flush to top, scaled to icon size
-                var batteryWidth = (int)(w * 0.75f);
-                var batteryHeight = (int)(h * 0.3f);
-                var x = (w - batteryWidth - 2) / 2; // Center with room for nub
-                var y = 0;
-
-                // Fill color
-                var fillColor = status.IsCharging ? Color.LightGreen :
-                               status.Percentage > 50 ? Color.LimeGreen :
-                               status.Percentage > 20 ? Color.Orange :
-                               Color.Red;
-
-                // Battery outline in a brighter shade of the fill color
-                var borderColor = ControlPaint.Light(fillColor, 0.5f);
-                using (var pen = new Pen(borderColor, 1))
-                {
-                    g.DrawRectangle(pen, x, y, batteryWidth, batteryHeight);
-                    // Battery terminal (right nub)
-                    using (var nubBrush = new SolidBrush(borderColor))
-                        g.FillRectangle(nubBrush, x + batteryWidth + 1, y + 1, 1, batteryHeight - 1);
-                }
-
-                var fillWidth = (int)(batteryWidth * status.Percentage / 100.0);
-                if (fillWidth > 0)
-                {
-                    using (var brush = new SolidBrush(fillColor))
-                    {
-                        g.FillRectangle(brush, x + 1, y + 1,
-                                      Math.Min(fillWidth, batteryWidth - 1), batteryHeight - 1);
-                    }
-                }
-
-                // Percentage text below the battery
-                var text = status.Percentage.ToString();
-                var fontSize = h * 0.4f;
-                using (var font = new Font("Segoe UI", fontSize, FontStyle.Bold))
                 using (var brush = new SolidBrush(fillColor))
                 {
-                    var size = g.MeasureString(text, font);
-                    g.DrawString(text, font, brush,
-                               (w - size.Width) / 2, batteryHeight + 1);
+                    g.FillRectangle(brush, x + 1, y + 1,
+                                  Math.Min(fillWidth, batteryWidth - 1), batteryHeight - 1);
                 }
+            }
+
+            // Percentage text below the battery
+            var text = status.Percentage.ToString();
+            var fontSize = h * 0.4f;
+            using (var font = new Font("Segoe UI", fontSize, FontStyle.Bold))
+            using (var brush = new SolidBrush(fillColor))
+            {
+                var size = g.MeasureString(text, font);
+                g.DrawString(text, font, brush,
+                           (w - size.Width) / 2, batteryHeight + 1);
             }
         }
 
@@ -270,15 +261,16 @@ public class TrayIconManager : ITrayIconManager
     private const string StartupRegistryKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
     private const string StartupValueName = "MouseFood";
 
-    private static bool IsStartupEnabled()
+    private bool IsStartupEnabled()
     {
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryKey);
             return key?.GetValue(StartupValueName) != null;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Failed to check startup registry key");
             return false;
         }
     }
@@ -312,6 +304,27 @@ public class TrayIconManager : ITrayIconManager
         {
             _logger.LogError(ex, "Failed to disable startup");
         }
+    }
+
+    private Icon LoadEmbeddedIcon()
+    {
+        // Load the icon embedded in the exe via <ApplicationIcon> in the csproj
+        var exePath = Environment.ProcessPath;
+        if (exePath != null && File.Exists(exePath))
+        {
+            try
+            {
+                return new Icon(exePath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load embedded icon from {ExePath}", exePath);
+            }
+        }
+
+        // Fallback: generate a simple icon
+        _logger.LogDebug("Using fallback application icon");
+        return SystemIcons.Application;
     }
 
     public void Dispose()

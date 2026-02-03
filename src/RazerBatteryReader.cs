@@ -20,4 +20,5 @@ public class BatteryStatus
     public int Percentage { get; set; }
     public bool IsCharging { get; set; }
     public DateTime LastUpdated { get; set; }
+    public string? DeviceName { get; set; }
 }
