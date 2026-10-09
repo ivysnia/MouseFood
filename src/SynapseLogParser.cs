@@ -93,8 +93,18 @@ public class SynapseLogParser
                 return null;
             }
 
-            // Get the most recent powerStatus entry (first match when searching from the end)
-            var powerStatusJson = matches[0].Value;
+            // Get the most recent powerStatus entry (first match when searching from the end),
+            // skipping devices reported as "off" (e.g. a powered-off mouse with a stale level)
+            var activeMatch = matches.FirstOrDefault(m =>
+                !Regex.IsMatch(m.Value, @"""chargingStatus""\s*:\s*""off""", RegexOptions.IgnoreCase));
+
+            if (activeMatch == null)
+            {
+                _logger.LogDebug("All powerStatus entries in {File} are for devices that are off", Path.GetFileName(filePath));
+                return null;
+            }
+
+            var powerStatusJson = activeMatch.Value;
             _logger.LogDebug("Found powerStatus: {Json}", powerStatusJson);
 
             // Parse the JSON fragment
@@ -118,7 +128,7 @@ public class SynapseLogParser
 
             // Try to extract device name from nearby context
             // Look for "name":"Device Name" pattern in the surrounding content
-            string? deviceName = ExtractDeviceName(content, matches[0].Index);
+            string? deviceName = ExtractDeviceName(content, activeMatch.Index);
 
             // Log device name only when it changes (or on first detection)
             if (deviceName != null && deviceName != _lastLoggedDevice)

@@ -39,6 +39,47 @@ public class SynapseLogParserTests : IDisposable
     }
 
     [Fact]
+    public void GetBatteryFromLogs_WithPoweredOffDeviceLast_UsesLatestActiveDeviceEntry()
+    {
+        // Arrange - an active mouse followed by a powered-off mouse with a stale level
+        var logContent = @"
+""powerStatus"":{""chargingStatus"":""NoCharge_BatteryFull"",""level"":88}
+""powerStatus"":{""chargingStatus"":""off"",""level"":98}
+""powerStatus"":{""chargingStatus"":""NoCharge_BatteryFull"",""level"":89}
+""powerStatus"":{""chargingStatus"":""off"",""level"":98}
+";
+        var logFilePath = Path.Combine(_testLogDirectory, "systray_systrayv21.log");
+        File.WriteAllText(logFilePath, logContent);
+
+        var parser = CreateParser(_testLogDirectory);
+
+        // Act
+        var result = parser.GetBatteryFromLogs();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(89, result.Percentage);
+        Assert.False(result.IsCharging);
+    }
+
+    [Fact]
+    public void GetBatteryFromLogs_WithOnlyPoweredOffDevices_ReturnsNull()
+    {
+        // Arrange
+        var logContent = @"""powerStatus"":{""chargingStatus"":""off"",""level"":98}";
+        var logFilePath = Path.Combine(_testLogDirectory, "systray_systrayv21.log");
+        File.WriteAllText(logFilePath, logContent);
+
+        var parser = CreateParser(_testLogDirectory);
+
+        // Act
+        var result = parser.GetBatteryFromLogs();
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
     public void GetBatteryFromLogs_WithChargingStatus_ReturnsIsChargingTrue()
     {
         // Arrange
